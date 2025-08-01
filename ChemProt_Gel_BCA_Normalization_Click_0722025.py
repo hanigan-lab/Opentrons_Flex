@@ -8,7 +8,7 @@ import datetime
 import time
 
 metadata = {
-    'protocolName': 'Gel-based Chemical Proteomics 06272025',
+    'protocolName': 'Gel-based Chemical Proteomics 20-sample 07182025',
     'author': 'Assistant',
     'description': 'Serial dilution of BSA standard and sample processing. This includes cooling samples to 4c, heating plate to 37c with shaking and recording a video of the whole process. Place BSA Standard in A1, Lysis buffer in A2, change the number of samples and place samples in row B starting at B1. MINIMUM Sample volumen in eppendorf tubes is 40 uL. '
 }
@@ -41,7 +41,6 @@ def run(protocol: protocol_api.ProtocolContext):
     chute = protocol.load_waste_chute()
 
     # Load adapters
-    #hs_adapter = heater_shaker.load_adapter('opentrons_universal_flat_adapter')
     temp_adapter = temp_module.load_labware('opentrons_24_aluminumblock_nest_1.5ml_screwcap')
 
     #set the heater_shaker temp to 60C
@@ -70,6 +69,7 @@ def run(protocol: protocol_api.ProtocolContext):
     tcep_click = protocol.define_liquid(name = 'tcep_click', display_color="#704900",)
     tbta = protocol.define_liquid(name = 'tbta', display_color="#701100",)
     loading_buffer = protocol.define_liquid(name = 'Loading Buffer', display_color="#4169E1",)
+    empty = protocol.define_liquid(name = 'empty', display_color="#FFFFFF")
     sample_liquids = [protocol.define_liquid(name = f'Sample {i + 1}', display_color="#FFA000",) for i in range(num_samples)]
 
     # Reservoir assignments for washes and digestion
@@ -84,6 +84,7 @@ def run(protocol: protocol_api.ProtocolContext):
     temp_adapter['D2'].load_liquid(liquid=rhodamine_azide, volume=1500) #click
     temp_adapter['D3'].load_liquid(liquid=tcep_click, volume=1500) #click
     temp_adapter['D4'].load_liquid(liquid=tbta, volume=1500) #click
+    temp_adapter['D5'].load_liquid(liquid=empty, volume=1500) #click
 
     # Load pipettes
     p50_multi = protocol.load_instrument('flex_8channel_50', 'left') 
@@ -229,8 +230,8 @@ def run(protocol: protocol_api.ProtocolContext):
     protocol.pause()
 
     # Tell the robot that new labware will be placed onto the deck
-    protocol.move_labware(labware=plate1, new_location='D4')
-    protocol.move_labware(labware=plate2, new_location='A2')
+    protocol.move_labware(labware=plate1, new_location='D4', use_gripper=True)
+    protocol.move_labware(labware=plate2, new_location='A2', use_gripper=True)
     protocol.move_labware(labware=plate3, new_location="B2", use_gripper=True)
     protocol.move_labware(labware=partial_50, new_location='B4', use_gripper=True)
 
@@ -311,6 +312,10 @@ def run(protocol: protocol_api.ProtocolContext):
     print(unknown_samples[['Sample', 'Protein Concentration (mg/mL)', 'Sample Volume (mL)', 'Diluent Volume (mL)']])
 
     normalized_samples = unknown_samples[['Sample', 'Protein Concentration (mg/mL)', 'Sample Volume (mL)', 'Diluent Volume (mL)']].reset_index().drop(columns='index')
+    # Write the output and image of data plot to the instrument jupyter notebook directory
+    filename = f"Protocol_output_{today_date}.csv"
+    output_file_destination_path = directory.joinpath(filename)
+    normalized_samples.to_csv(output_file_destination_path)
     rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
     destination_wells  = [f'{rows[i % 8]}{(i // 8)+ 1}' for i in range(len(normalized_samples))]
 
@@ -329,14 +334,15 @@ def run(protocol: protocol_api.ProtocolContext):
     p50_multi.configure_nozzle_layout(style=SINGLE, start="A1", tip_racks=[partial_50]) #,
     
     #Pipette rhodamine azide (d2), tbta (d4), cuso4 (d1), and tcep (d3)
-    p50_multi.transfer(1*(num_samples*1.5), 
+    p50_multi.transfer(1*(num_samples*2), 
                             temp_adapter['D2'], 
                             temp_adapter['D6'],
-                            rate=speed,
+                            rate=speed-0.1,
                             mix_before=(1,10), 
+                            delay=2,
                             new_tip='once')
 
-    p50_multi.transfer(6*(num_samples*1.5), 
+    p50_multi.transfer(6*(num_samples*2), 
                             temp_adapter['D4'], 
                             temp_adapter['D6'],
                             mix_before=(1,10),
@@ -344,22 +350,24 @@ def run(protocol: protocol_api.ProtocolContext):
                             delay=3, 
                             new_tip='once')
 
-    p50_multi.transfer(2*(num_samples*1.5), 
+    p50_multi.transfer(2*(num_samples*2), 
                             temp_adapter['D1'], 
                             temp_adapter['D6'], 
                             new_tip='once')
 
-    p50_multi.transfer(2*(num_samples*1.5), 
+    p50_multi.transfer(2*(num_samples*2), 
+                            temp_adapter['D3'], 
                             temp_adapter['D6'], 
-                            temp_adapter['A5'], 
+                            mix_after=(3,50),
                             new_tip='once')
     
     # Pipette the click reaction premix
-    p50_multi.distribute(6, 
+    p50_multi.transfer(6, 
                             temp_adapter['D6'], 
                             [plate3[i] for i in destination_wells],
                             rate=speed-0.1,
-                            mix_before=(3, 30),
+                            delay=2,
+                            mix_before=(1, 10),
                             mix_after=(3, 30), 
                             new_tip='always')
 
@@ -372,10 +380,10 @@ def run(protocol: protocol_api.ProtocolContext):
 
     # Add the loading buffer and move to the thermocylcer to seal and store.
     p50_multi.configure_nozzle_layout(style=ALL, tip_racks=[partial_50])
-    p50_multi.distribute(50, 
+    p50_multi.transfer(50, 
                             reservoir['A9'], 
-                            [plate3[i].bottom(z=7) for i in destination_wells], 
-                            #mix_after=(3, 40), 
+                            [plate3[i] for i in destination_wells], 
+                            mix_after=(3, 40), 
                             new_tip='always')
 
     heater_shaker.open_labware_latch()
