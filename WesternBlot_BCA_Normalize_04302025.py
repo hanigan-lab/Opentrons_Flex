@@ -76,7 +76,7 @@ def run(protocol: protocol_api.ProtocolContext):
 
     # Load adapters
     hs_adapter = heater_shaker.load_adapter('opentrons_universal_flat_adapter')
-    temp_adapter = temp_module.load_labware('opentrons_24_aluminumblock_nest_1.5ml_screwcap')
+    temp_adapter = temp_module.load_labware('opentrons_24_aluminumblock_nest_1.5ml_snapcap')
 
     #set the heater_shaker temp to 60C
     heater_shaker.set_and_wait_for_temperature(50)
@@ -124,7 +124,7 @@ def run(protocol: protocol_api.ProtocolContext):
     p1000_multi.configure_nozzle_layout(style=ALL, tip_racks=[tips_200])
 
     #Start recording the video
-    video_process = subprocess.Popen(["python3", "/var/lib/jupyter/notebooks/record_video.py"])
+    video_process = subprocess.Popen(["python3", "/var/lib/jupyter/notebooks/record_video_western.py"])
 
     # Steps 1: Add lysis buffer to column 1 of plate1. 
     p1000_multi.distribute(50, 
