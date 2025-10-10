@@ -35,7 +35,7 @@ def add_parameters(parameters):
         display_name="Target protein concentration",
         description="Concentration of normalized lysate in click reaction",
         default=1.5,
-        minimum=1,
+        minimum=0.5,
         maximum=2.5,
         unit="µg/µL"
     )
@@ -46,9 +46,10 @@ def add_parameters(parameters):
         description="Volume to normalize µg of protein in",
         default=50,
         minimum=50,
-        maximum=500,
+        maximum=1000,
         unit="µL"
     )
+
 def run(protocol: protocol_api.ProtocolContext):
     protocol.comment(
         "Place BSA Standard in A1, Lysis buffer in A2, tbta in A3, biotin in A4, cuso4 in A5, tcep in A6 and samples in row B")
@@ -115,6 +116,8 @@ def run(protocol: protocol_api.ProtocolContext):
             sample_locations.append(f'C{i - 5}')
         elif i < 18:  # D1 to D6
             sample_locations.append(f'D{i - 11}')
+        elif i < 23:
+            sample_locations.append(f'A{i - 16}')  # Stop if we exceed the number of available rows/columns
         else:
             break  # Stop if we exceed the number of available rows/columns
 
@@ -207,8 +210,17 @@ def run(protocol: protocol_api.ProtocolContext):
         normalized_volume = row['Sample Volume (µL)']
         diluent_volume = protocol.params.final_volume - normalized_volume
         destination_well = destination_wells[i]
-        p1000_multi.transfer(normalized_volume, temp_adapter[source_well], plate3[destination_well], rate=0.5, new_tip='once')
-        p1000_multi.transfer(diluent_volume, reservoir['A7'], plate3[destination_well], rate=0.5, new_tip='once')
+        p1000_multi.transfer(normalized_volume, 
+                            temp_adapter[source_well], 
+                            plate3[destination_well].bottom(z=0.1), 
+                            rate=0.5, 
+                            new_tip='once')
+
+        p1000_multi.transfer(diluent_volume, 
+                            reservoir['A7'], 
+                            plate3[destination_well].bottom(z=0.1), 
+                            rate=0.5, 
+                            new_tip='once')
 
     # ---------------- Click Reaction ----------------
     protocol.comment("Running click reaction")
@@ -333,7 +345,7 @@ def run(protocol: protocol_api.ProtocolContext):
     # Step 11: shake the sample plate for click reaction
     protocol.move_labware(labware=plate3, new_location=heater_shaker, use_gripper=True)
     heater_shaker.close_labware_latch()
-    heater_shaker.set_and_wait_for_shake_speed(1000)
+    heater_shaker.set_and_wait_for_shake_speed(500)
     protocol.delay(minutes=90)
     heater_shaker.deactivate_shaker()
     heater_shaker.open_labware_latch()
@@ -358,3 +370,5 @@ def run(protocol: protocol_api.ProtocolContext):
     thermocycler.set_block_temperature(95)
     protocol.delay(minutes=5)
     thermocycler.set_block_temperature(4)  # Hold at 4°C
+    # Stop video recording after the main task is completed
+    video_process.terminate()

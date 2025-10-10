@@ -8,9 +8,9 @@ import datetime
 import time
 
 metadata = {
-    'protocolName': 'Gel-based Chemical Proteomics BCA No 07182025',
-    'author': 'Assistant',
-    'description': 'Serial dilution of BSA standard and sample processing. This includes cooling samples to 4c, heating plate to 37c with shaking and recording a video of the whole process. Place BSA Standard in A1, Lysis buffer in A2, change the number of samples and place samples in row B starting at B1. MINIMUM Sample volumen in eppendorf tubes is 40 uL. '
+    'protocolName': 'BCA Normalization and TMT reactions 08302025',
+    'author': 'Om Patel and Thomas Hanigan',
+    'description': 'BCA assay, followed by sample normalization, click reaction, and denaturation for Gel-based photolabeling.'
 }
 
 requirements = {
@@ -36,28 +36,42 @@ def add_parameters(parameters):
         minimum=1,
         maximum=12
     )
+    parameters.add_str(
+        variable_name="tmt_row",
+        display_name="tmt row",
+        description="Integer of column on plate1 where standards will be diluted",
+        default='A',
+        choices=[{"display_name": "A", "value": "A"},
+                    {"display_name": "B", "value": "B"},
+                    {"display_name": "C", "value": "C"},
+                    {"display_name": "D", "value": "D"},
+                    {"display_name": "E", "value": "E"},
+                    {"display_name": "F", "value": "F"},
+                    {"display_name": "G", "value": "G"},
+                    {"display_name": "H", "value": "H"}]
+    )
     parameters.add_float(
         variable_name="target_concentration",
         display_name="Target protein concentration",
         description="Concentration of normalized lysate in click reaction",
-        default=1.5,
-        minimum=1,
-        maximum=2.5,
+        default=1,
+        minimum=0.5,
+        maximum=2,
         unit="µg/µL"
     )
-
     parameters.add_int(
         variable_name="final_volume",
         display_name="final volume lysate",
         description="Volume to normalize µg of protein in",
-        default=50,
-        minimum=50,
-        maximum=500,
+        default=10,
+        minimum=2,
+        maximum=20,
         unit="µL"
     )
+
 def run(protocol: protocol_api.ProtocolContext):
     protocol.comment(
-        "Place BSA Standard in A1, Lysis buffer in A2, tbta in A3, biotin in A4, cuso4 in A5, tcep in A6 and samples in row B")
+        "YOU ARE THE BEST!!! HAVE A GREAT DAY!!!")
     protocol.comment("Running the BCA assay")
     num_rows = 8  # A-H
     speed= 0.3 #Speed of pipetting NP40 lysis buffer=0.35, 2M Urea in EPPS=0.3
@@ -88,35 +102,27 @@ def run(protocol: protocol_api.ProtocolContext):
     plate1 = protocol.load_labware('opentrons_96_wellplate_200ul_pcr_full_skirt', 'A2') 
     plate2 = protocol.load_labware('corning_96_wellplate_360ul_flat', location='B2') #on heatshaker
     plate3 = protocol.load_labware('opentrons_96_wellplate_200ul_pcr_full_skirt', location='A4')  # New deep well plate for final samples
+    tmt_plate = protocol.load_labware('opentrons_96_wellplate_200ul_pcr_full_skirt', location=protocol_api.OFF_DECK)
     reservoir = protocol.load_labware('nest_12_reservoir_15ml', 'C2')
     
     # Liquid definitions
-    bsa_standard = protocol.define_liquid(name = 'BSA Standard', display_color="#704848",)
-    bsa_reag_a = protocol.define_liquid(name = 'Reagent A', display_color="#704300",)
-    bsa_reag_b = protocol.define_liquid(name = 'Reagent B', display_color="#704900",)
-    bsa_reag_c = protocol.define_liquid(name = 'Reagent C', display_color="#701100",)
-    excess_lysis = protocol.define_liquid(name='Excess Lysis Buffer', display_color="#FFC0CB")  # Pink
-    copper_sulfate = protocol.define_liquid(name = 'copper_sulfate', display_color="#704848",)
-    rhodamine_azide = protocol.define_liquid(name = 'rhodamine_azide', display_color="#704300",)
-    tcep_click = protocol.define_liquid(name = 'tcep_click', display_color="#704900",)
-    tbta = protocol.define_liquid(name = 'tbta', display_color="#701100",)
-    loading_buffer = protocol.define_liquid(name = 'Loading Buffer', display_color="#4169E1",)
-    empty = protocol.define_liquid(name = 'empty', display_color="#FFFFFF")
-    sample_liquids = [protocol.define_liquid(name = f'Sample {i + 1}', display_color="#FFA000",) for i in range(protocol.params.num_samples)]
+    bsa_standard = protocol.define_liquid(name='BSA Standard', display_color="#FF6F61")      # Bright Coral
+    bsa_reag_a = protocol.define_liquid(name='Reagent A', display_color="#FFD700")           # Bright Gold
+    bsa_reag_b = protocol.define_liquid(name='Reagent B', display_color="#40E0D0")           # Turquoise
+    bsa_reag_c = protocol.define_liquid(name='Reagent C', display_color="#FF69B4")           # Hot Pink
+    excess_lysis = protocol.define_liquid(name='Excess Lysis Buffer', display_color="#FFB6C1")  # Light Pink
+    hydroxylamine = protocol.define_liquid(name='hydroxylamine', display_color="#8A2BE2")   # Blue Violet
+    empty = protocol.define_liquid(name='empty', display_color="#FFFFFF")                    # White
+    sample_liquids = [protocol.define_liquid(name=f'Sample {i + 1}', display_color="#FFA000") for i in range(protocol.params.num_samples)]  # Amber for samples
 
     # Reservoir assignments for washes and digestion
     reservoir['A1'].load_liquid(liquid=bsa_reag_a, volume=20000)  
     reservoir['A3'].load_liquid(liquid=bsa_reag_b, volume=20000)  
     reservoir['A5'].load_liquid(liquid=bsa_reag_c, volume=20000)  
     reservoir['A7'].load_liquid(liquid=excess_lysis, volume=15000) 
-    reservoir['A9'].load_liquid(liquid=loading_buffer, volume=1000)  
-
-    temp_adapter['A1'].load_liquid(liquid=bsa_standard, volume = 1500)
-    temp_adapter['D1'].load_liquid(liquid=copper_sulfate, volume=1500) #click
-    temp_adapter['D2'].load_liquid(liquid=rhodamine_azide, volume=1500) #click
-    temp_adapter['D3'].load_liquid(liquid=tcep_click, volume=1500) #click
-    temp_adapter['D4'].load_liquid(liquid=tbta, volume=1500) #click
-    temp_adapter['D5'].load_liquid(liquid=empty, volume=1500) #click
+    temp_adapter['A1'].load_liquid(liquid=bsa_standard, volume = 1000)
+    temp_adapter['A2'].load_liquid(liquid=hydroxylamine, volume=1000) #click
+    temp_adapter['A6'].load_liquid(liquid=empty, volume=0) #click
 
     # Load pipettes
     p50_multi = protocol.load_instrument('flex_8channel_50', 'left') 
@@ -263,12 +269,13 @@ def run(protocol: protocol_api.ProtocolContext):
 
     # Tell the robot that new labware will be placed onto the deck
     protocol.move_labware(labware=plate1, new_location='D4', use_gripper=True)
-    protocol.move_labware(labware=plate2, new_location='A2', use_gripper=True)
+    protocol.move_labware(labware=plate2, new_location='C3', use_gripper=True)
     protocol.move_labware(labware=plate3, new_location="B2", use_gripper=True)
-    protocol.move_labware(labware=partial_50, new_location='B4', use_gripper=True)
+    protocol.move_labware(labware=tips_1000, new_location='C4', use_gripper=True)
+    protocol.move_labware(labware=tmt_plate, new_location='A2')
 
-    #Configure the p1000 pipette to use single tip NOTE: this resets the pipettes tip racks!
-    p1000_multi.configure_nozzle_layout(style=SINGLE, start="A1",tip_racks=[tips_200])
+    #Load the p50 with full tip rack (don't need to)
+    p50_multi.configure_nozzle_layout(style=SINGLE, start="A1",tip_racks=[partial_50])
 
     # Define the directory path
     directory = Path("/var/lib/jupyter/notebooks/Data/")
@@ -335,15 +342,14 @@ def run(protocol: protocol_api.ProtocolContext):
     unknown_samples = final_df.iloc[8:8 + protocol.params.num_samples]
     unknown_samples['Mean Absorbance'] = unknown_samples[['Replicate 1', 'Replicate 2', 'Replicate 3']].mean(axis=1)
     unknown_samples['Protein Concentration (mg/mL)'] = (unknown_samples['Mean Absorbance'] - intercept) / slope
+    unknown_samples['Sample Volume (µL)'] = (protocol.params.target_concentration * protocol.params.final_volume) / unknown_samples['Protein Concentration (mg/mL)']
+    unknown_samples['Diluent Volume (µL)'] = protocol.params.final_volume - unknown_samples['Sample Volume (µL)']
+    unknown_samples.loc[unknown_samples['Sample Volume (µL)'] > protocol.params.final_volume, ['Sample Volume (µL)', 'Diluent Volume (µL)']] = [protocol.params.final_volume, 0]
+    protocol.comment(f"\nNormalized Unknown Samples (to {protocol.params.target_concentration} mg/mL in {protocol.params.final_volume} µL):")
+    summary = unknown_samples[['Sample', 'Protein Concentration (mg/mL)', 'Sample Volume (µL)', 'Diluent Volume (µL)']].to_string(index=False)
+    protocol.comment(f"\nNormalized sample volumes:\n{summary}")
 
-
-    unknown_samples['Sample Volume (mL)'] = (protocol.params.target_concentration * protocol.params.final_volume) / unknown_samples['Protein Concentration (mg/mL)']
-    unknown_samples['Diluent Volume (mL)'] = protocol.params.final_volume - unknown_samples['Sample Volume (mL)']
-    unknown_samples.loc[unknown_samples['Sample Volume (mL)'] > protocol.params.final_volume, ['Sample Volume (mL)', 'Diluent Volume (mL)']] = [protocol.params.final_volume, 0]
-    protocol.comment("\nNormalized Unknown Samples (to 1 mg/mL in {protocol.params.final_volume} µL):")
-    print(unknown_samples[['Sample', 'Protein Concentration (mg/mL)', 'Sample Volume (mL)', 'Diluent Volume (mL)']])
-
-    normalized_samples = unknown_samples[['Sample', 'Protein Concentration (mg/mL)', 'Sample Volume (mL)', 'Diluent Volume (mL)']].reset_index().drop(columns='index')
+    normalized_samples = unknown_samples[['Sample', 'Protein Concentration (mg/mL)', 'Sample Volume (µL)', 'Diluent Volume (µL)']].reset_index().drop(columns='index')
     # Write the output and image of data plot to the instrument jupyter notebook directory
     filename = f"Protocol_output_{today_date}.csv"
     output_file_destination_path = directory.joinpath(filename)
@@ -353,8 +359,55 @@ def run(protocol: protocol_api.ProtocolContext):
 
     for i, row in normalized_samples.iterrows():
         source_well = sample_locations[i]
-        normalized_volume = row['Sample Volume (mL)']
+        normalized_volume = row['Sample Volume (µL)']
         diluent_volume = protocol.params.final_volume - normalized_volume
         destination_well = destination_wells[i]
-        p1000_multi.transfer(normalized_volume, temp_adapter[source_well], plate3[destination_well], rate=0.5, new_tip='once')
-        p1000_multi.transfer(diluent_volume, reservoir['A7'], plate3[destination_well], rate=0.5, new_tip='once')
+        p50_multi.transfer(normalized_volume, 
+                            temp_adapter[source_well], 
+                            plate3[destination_well], 
+                            rate=0.5, 
+                            new_tip='once')
+        p50_multi.transfer(diluent_volume, 
+                            reservoir['A7'], 
+                            plate3[destination_well], 
+                            rate=0.5, 
+                            new_tip='once')
+
+    # ---------------- TMT Reaction ----------------
+    protocol.comment("Running TMT reaction")
+    tmt_dilution_wells = [f'{rows[i % 8]}{(i // 8) + 3}' for i in range(protocol.params.num_samples)]  # Assuming destination column is col 3
+    # Add TMT reagents
+    tmt_sources = [tmt_plate[f'{protocol.params.tmt_row}{i+1}'] for i in range(protocol.params.num_samples)]
+    for source, dest in zip(tmt_sources, tmt_dilution_wells):
+        p50_multi.transfer(5, 
+                            source, 
+                            plate3[dest].bottom(z=0.1),
+                            rate=speed-0.1,
+                            delay=2,
+                            mix_after=(3, 5), 
+                            new_tip='always')
+    
+    # Step 11: shake the sample plate for click reaction
+    protocol.move_labware(labware=plate3, new_location=heater_shaker, use_gripper=True)
+    heater_shaker.close_labware_latch()
+    heater_shaker.set_and_wait_for_shake_speed(1000)
+    protocol.delay(minutes=120)
+    heater_shaker.deactivate_shaker()
+    heater_shaker.open_labware_latch()
+    thermocycler.open_lid()
+    protocol.move_labware(labware=plate3, new_location=thermocycler, use_gripper=True)
+
+    #Add hydroxylamine solution
+    for source, dest in zip(tmt_sources, tmt_dilution_wells):
+        p50_multi.transfer(1, 
+                            temp_adapter['A2'], 
+                            plate3[dest],
+                            mix_after=(2, 5),
+                            new_tip='once')
+
+    # Add the loading buffer and move to the thermocylcer to seal and store.
+    thermocycler.close_lid()
+    protocol.delay(minutes=5)
+    # Stop video recording after the main task is completed
+    video_process.terminate()
+    thermocycler.set_block_temperature(4)  # Hold at 4°C
