@@ -9,7 +9,7 @@ import datetime
 import time
 
 metadata = {
-    'protocolName': 'TMT-labeled whole proteome sample preparation 09042025',
+    'protocolName': 'TMT-labeled whole proteome Trypsin+AspN preparation 03162026',
     'author': 'Assistant',
     'description': 'BCA assay and sample protein normalization (<20 Samples), reduction/alkylation and SP3 sample cleanup, trypsin digestion and on bead TMT reaction.'
 }
@@ -113,7 +113,7 @@ def run(protocol: protocol_api.ProtocolContext):
         "tips_1000_2": "D4"
     }
 
-    # load the liquids to the tube racks and reservoirs
+# load the liquids to the tube racks and reservoirs
     bsa_standard = protocol.define_liquid(name='BSA Standard', display_color="#FF00FF")  # Brown
     bsa_reag_a = protocol.define_liquid(name = 'Reagent A', display_color="#00FFFF")
     bsa_reag_b = protocol.define_liquid(name = 'Reagent B', display_color="#FFFF00")
@@ -124,12 +124,14 @@ def run(protocol: protocol_api.ProtocolContext):
     empty_2mL = protocol.define_liquid(name='empty_2mL', display_color="#1685A4")  # SteelBlue
     IAA =  protocol.define_liquid(name='IAA', display_color="#AA00FF")  # ?
     excess_lysis = protocol.define_liquid(name='Excess Lysis Buffer', display_color="#FF0099")  # Pink
-    epps = protocol.define_liquid(name='EPPS', display_color="#00FF99")  # SaddleBrown
     epps_urea = protocol.define_liquid(name='2M Urea in EPPS', display_color="#00FF99")  # SaddleBrown
+    epps = protocol.define_liquid(name='EPPS', display_color="#00FF99")  # SaddleBrown
     abs_ethanol = protocol.define_liquid(name='100% Ethanol', display_color="#4682B4")  # SteelBlue
     ethanol_80 = protocol.define_liquid(name='80% Ethanol', display_color="#4682B4")  # SteelBlue
     trypsin = protocol.define_liquid(name='Trypsin in EPPS', display_color="#9900FF")  # Gold
-    cacl2 = protocol.define_liquid(name='CaCl2', display_color="#FF3300")  # LimeGreen
+    aspn = protocol.define_liquid(name='AspN in EPPS', display_color="#9900FF")  # Gold
+    cacl2 = protocol.define_liquid(name='CaCl2+ZnCl2', display_color="#FF3300")  # LimeGreen
+    ACN = protocol.define_liquid(name='ACN', display_color="#FF3300")
     hydroxylamine = protocol.define_liquid(name='hydroxylamine', display_color="#8A2BE2")   # Blue Violet
     sample_liquids = [protocol.define_liquid(name = f'Sample {i + 1}', display_color="#FFA000",) for i in range(protocol.params.num_samples)]
 
@@ -150,6 +152,8 @@ def run(protocol: protocol_api.ProtocolContext):
     temp_adapter['A4'].load_liquid(liquid=K2CO3, volume=1000)  # reduce
     temp_adapter['A5'].load_liquid(liquid=IAA, volume=1000)  # alkylate
     temp_adapter['A6'].load_liquid(liquid=empty_2mL, volume=0)  # empty tube to combine TCEP/K2CO3
+    temp_adapter['D2'].load_liquid(liquid=aspn, volume=1000) # ACN for TMT
+    temp_adapter['D3'].load_liquid(liquid=ACN, volume=1000) # ACN for TMT
     temp_adapter['D4'].load_liquid(liquid=hydroxylamine, volume=200) # Quench TMT reaction
     temp_adapter['D5'].load_liquid(liquid=cacl2, volume=500)  # CaCl2 for digestion
     temp_adapter['D6'].load_liquid(liquid=trypsin, volume=2000)  # Trypsin in EPPS for digestion
@@ -198,6 +202,7 @@ def run(protocol: protocol_api.ProtocolContext):
                          new_tip='never', 
                          disposal_vol=0)
     p50_multi.drop_tip()
+
     # --- support up to 24 samples (B1–B6, C1–C6, D1–D6, E1–E6) ---
     if protocol.params.num_samples > 24:
         protocol.comment("num_samples > 24 requested; capping at 24.")
@@ -642,11 +647,14 @@ def run(protocol: protocol_api.ProtocolContext):
     )
 
     # ---------------- Digestion ----------------
+    #Configure the p1000 pipette to use All tips
+    trypsin_wells = destination_wells[:5]    # samples 1–5
+    trypsin_aspn_wells = destination_wells[5:10]  # samples 6–10
     protocol.move_labware(labware=tips_1000_2, new_location="D4", use_gripper=True)
     p1000_multi.configure_nozzle_layout(style=SINGLE, start='A1' ,tip_racks=[tips_1000])
 
     # Add CaCl2, trypsin in epps, and move to shaker
-    p1000_multi.distribute(2.5, 
+    p1000_multi.distribute(5, 
                             temp_adapter['D5'], 
                             [plate3[i].bottom(z=0.5) for i in destination_wells],
                             disposal_vol=10, 
@@ -656,6 +664,26 @@ def run(protocol: protocol_api.ProtocolContext):
     p1000_multi.distribute(50, 
                             temp_adapter['D6'], 
                             [plate3[i].top(z=-10) for i in destination_wells],
+                            disposal_vol=0,
+                            rate=speed,
+                            mix_before=(1,150),
+                            #mix_after=(3,500),
+                            new_tip='once')
+
+    # Add AspN. For 50ug protein, resuspend trypsin in 2000 uL 2 M urea EPPS and place 500 uL on the robot. 
+    p1000_multi.distribute(20, 
+                            temp_adapter['D2'], 
+                            [plate3[i].top(z=-10) for i in trypsin_aspn_wells],
+                            disposal_vol=0,
+                            rate=speed,
+                            mix_before=(1,150),
+                            #mix_after=(3,500),
+                            new_tip='once')
+
+    # Add make up volume. For difference between trypsin and aspn. 
+    p1000_multi.distribute(20, 
+                            reservoir['A11'], 
+                            [plate3[i].top(z=-10) for i in trypsin_wells],
                             disposal_vol=0,
                             rate=speed,
                             mix_before=(1,150),
@@ -704,7 +732,6 @@ def run(protocol: protocol_api.ProtocolContext):
     protocol.move_labware(labware=tips_200, new_location="B4", use_gripper=True)
     protocol.move_labware(labware=tips_1000, new_location="C4", use_gripper=True)
     protocol.move_labware(labware=plate3, new_location='B2', use_gripper=True)
-
     p50_multi.configure_nozzle_layout(style=ALL, tip_racks=[tips_50])
 
     for c in range(src_cols_count):  # includes the final partial column
@@ -723,7 +750,20 @@ def run(protocol: protocol_api.ProtocolContext):
     p50_multi.configure_nozzle_layout(style=SINGLE, start="A1", tip_racks=[tips_50])
     tmt_dilution_wells = [plate4.wells_by_name()[f"{rows[i % 8]}{(i // 8) + 1}"] for i in range(protocol.params.num_samples)]
     tmt_sources = [tmt_plate.wells_by_name()[f"{protocol.params.tmt_row}{c}"] for c in range(1, protocol.params.num_samples + 1)]
+    
+    #Add ACN prior to TMT tags
+    for dest in tmt_dilution_wells:
+        p50_multi.transfer(
+            5,
+            temp_adapter['D3'],
+            dest.bottom(z=0.1),
+            disposal_vol=0,
+            rate=0.2,
+            new_tip='always',
+            mix_after=(3, 10)
+        )
 
+    #Add TMT tags
     for source, dest in zip(tmt_sources, tmt_dilution_wells):
         p50_multi.transfer(
             5,
