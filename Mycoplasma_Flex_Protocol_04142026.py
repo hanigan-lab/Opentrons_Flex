@@ -160,7 +160,7 @@ def run(protocol: protocol_api.ProtocolContext):
                             temp_adapter['A6'], 
                             new_tip='once',
                             mix_before=(1, 10),
-                            rate= 0.3)
+                            rate= 0.2)
 
     p1000_multi.distribute((primer_vol*numtotalSamples*protocol.params.num_replicates), 
                             temp_adapter['A2'].bottom(z=2), 
